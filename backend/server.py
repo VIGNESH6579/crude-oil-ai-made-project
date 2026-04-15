@@ -68,6 +68,7 @@ async def startup_event():
     # If not simulation, connect to broker in background
     if not SIMULATION_MODE:
         def get_active_crude_token():
+            from datetime import datetime
             try:
                 url = "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json"
                 data = requests.get(url).json()
@@ -75,10 +76,27 @@ async def startup_event():
                 for item in data:
                     if item.get("exch_seg") == "MCX" and item.get("name") == "CRUDEOIL" and item.get("instrumenttype", "").upper() == "FUTCOM":
                         crude_tokens.append(item)
+                
+                def expiry_key(x):
+                    exp = x.get("expiry", "")
+                    try:
+                        return datetime.strptime(exp, "%d%b%Y")
+                    except Exception:
+                        try:
+                            return datetime.strptime(exp, "%d-%b-%Y")
+                        except Exception:
+                            return datetime.max
+                            
                 if crude_tokens:
-                    crude_tokens.sort(key=lambda x: x.get("expiry", ""))
-                    print(f"Auto-fetched Crude Token: {crude_tokens[0]['token']} Expiry: {crude_tokens[0]['expiry']}")
-                    return crude_tokens[0]["token"]
+                    crude_tokens.sort(key=expiry_key)
+                    # Filter out historically expired contracts (keep only future/today expiries)
+                    now = datetime.now()
+                    active_tokens = [t for t in crude_tokens if expiry_key(t) >= datetime(now.year, now.month, now.day)]
+                    if not active_tokens:
+                        active_tokens = crude_tokens
+                        
+                    print(f"Auto-fetched Crude Token: {active_tokens[0]['token']} Expiry: {active_tokens[0]['expiry']}")
+                    return active_tokens[0]["token"]
             except Exception as e:
                 print("Failed to auto-fetch token:", e)
             return "225431"
