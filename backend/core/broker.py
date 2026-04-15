@@ -32,6 +32,7 @@ class AngelBroker:
                 return False
                 
             self.feed_token = self.smart_api.getfeedToken()
+            self.auth_token = data['data']['jwtToken']
             return True
         except Exception as e:
             logger.error(f"Login failed: {e}")
@@ -51,7 +52,12 @@ class AngelBroker:
         # Token needs to be in format "{exchange}|{token}" e.g., "MCX|223293"
         token_list = [{"exchangeType": 5, "tokens": [token]}] # 5 represents MCX
 
-        self.sws = SmartWebSocketV2(self.feed_token, self.client_id, self.api_key, correlation_id)
+        self.sws = SmartWebSocketV2(
+            auth_token=self.auth_token,
+            api_key=self.api_key,
+            client_code=self.client_id,
+            feed_token=self.feed_token
+        )
         
         def on_data(wsapp, message):
             tick_data = self._parse_tick(message)
