@@ -26,7 +26,8 @@ def send_ntfy_alert(signal_data):
         strike = signal_data.get("suggested_strike")
         target = signal_data.get("target")
         sl = signal_data.get("stop_loss")
-        message = f"🚨 {action} Signal Alert!\nOption: {strike}\nTarget: {target}\nStop Loss: {sl}"
+        current_ltp = signal_data.get("current_ltp")
+        message = f"🚨 {action} Signal Alert!\n📈 Strike: {strike}\n💰 Current Base LTP: {current_ltp}\n🎯 Target LTP: {target}\n🛑 Stop Loss: {sl}\n\n(Base LTP determines direction for Call/Put Options)"
         
         headers = {
             "Title": f"Crude Oil Scalp: {action}",

@@ -49,8 +49,8 @@ def analyze_tick(current_tick: dict) -> dict:
         rounded_strike = round(current_price / 100) * 100
         strike_price = rounded_strike if rounded_strike >= current_price else rounded_strike + 100
         strike = f"{int(strike_price)} CE" # Call Option
-        target = "15 pts"
-        sl = "8 pts"
+        target = f"{round(current_price + 35, 2)}"
+        sl = f"{round(current_price - 15, 2)}"
     elif imbalance < -0.4 and momentum < 0:
         signal = "SELL"
         confidence = min(0.98, 0.5 + abs(imbalance) * 0.5)
@@ -58,13 +58,14 @@ def analyze_tick(current_tick: dict) -> dict:
         rounded_strike = round(current_price / 100) * 100
         strike_price = rounded_strike if rounded_strike <= current_price else rounded_strike - 100
         strike = f"{int(strike_price)} PE" # Put Option
-        target = "15 pts"
-        sl = "8 pts"
+        target = f"{round(current_price - 35, 2)}"
+        sl = f"{round(current_price + 15, 2)}"
         
     return {
         "status": "ACTIVE",
         "action": signal,
         "confidence": confidence,
+        "current_ltp": current_price,
         "imbalance": round(imbalance, 2),
         "suggested_strike": strike,
         "target": target,
