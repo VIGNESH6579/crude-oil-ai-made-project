@@ -96,12 +96,18 @@ async def startup_event():
                         active_tokens = crude_tokens
                         
                     print(f"Auto-fetched Crude Token: {active_tokens[0]['token']} Expiry: {active_tokens[0]['expiry']}")
-                    return active_tokens[0]["token"]
+                    return active_tokens[0]["token"], active_tokens[0]["expiry"]
             except Exception as e:
                 print("Failed to auto-fetch token:", e)
-            return "225431"
+            return "225431", "UNKNOWN"
 
-        TARGET_TOKEN = os.getenv("CRUDE_TOKEN") or get_active_crude_token()
+        fetch_res = get_active_crude_token()
+        if isinstance(fetch_res, tuple):
+            TARGET_TOKEN, TARGET_EXPIRY = fetch_res
+        else:
+            TARGET_TOKEN, TARGET_EXPIRY = fetch_res, "UNKNOWN"
+        
+        TARGET_TOKEN = os.getenv("CRUDE_TOKEN") or TARGET_TOKEN
         main_loop = asyncio.get_running_loop()
         
         last_tick_time = 0
@@ -112,6 +118,7 @@ async def startup_event():
             import time
             last_tick_time = time.time()
             global_last_price = tick_data.get("price", global_last_price)
+            tick_data["symbol"] = f"CRUDEOIL ({TARGET_EXPIRY})"
             
             signal = analyze_tick(tick_data)
             process_signal_and_notify(signal)
@@ -152,7 +159,7 @@ async def startup_event():
                     global_last_price = tick_price
                     
                     tick_data = {
-                        "symbol": "CRUDEOIL (Sim)",
+                        "symbol": f"CRUDEOIL ({TARGET_EXPIRY}) - Sim",
                         "price": round(tick_price, 2),
                         "volume": random.randint(100, 5000),
                         "bid_qty": random.randint(50, 400),

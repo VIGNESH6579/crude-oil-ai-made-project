@@ -79,7 +79,7 @@ function App() {
         <div className="panel" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
           <div className="price-display">
             <div>
-              <div className="price-sub">MCX CRUDEOIL</div>
+              <div className="price-sub">{marketData.symbol || 'MCX CRUDEOIL'}</div>
               <div className={`current-price ${marketData.price > 6500 ? 'up' : 'down'}`}>
                 ₹{marketData.price.toFixed(2)}
               </div>
