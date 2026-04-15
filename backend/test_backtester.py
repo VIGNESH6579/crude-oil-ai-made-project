@@ -1,51 +1,101 @@
-import random
 import time
+import os
+from datetime import datetime
+from dotenv import load_dotenv
+from SmartApi.smartConnect import SmartConnect
 from ai.signal_engine import analyze_tick, TickBuffer
 
-def generate_synthetic_ticks(num_ticks=2000):
-    ticks = []
-    current_price = 6500.0
+load_dotenv()
+
+def fetch_real_historical_data(api_key, symbol_token):
+    print(f"Connecting to Angel One with token {symbol_token}...")
+    obj = SmartConnect(api_key=api_key)
     
-    for i in range(num_ticks):
-        # Create trends and noise
-        step = random.uniform(-2.0, 2.0)
-        # Add a spoofed volume scenario occasionally
-        is_spoof = random.random() < 0.05
+    client_id = os.getenv("CLIENT_ID")
+    password = os.getenv("PASSWORD")
+    totp_secret = os.getenv("TOTP_SECRET")
+    
+    if not all([api_key, client_id, password, totp_secret]):
+         print("Missing Angel One Credentials in .env! Cannot fetch historical data.")
+         return []
+         
+    import pyotp
+    totp = pyotp.TOTP(totp_secret).now()
+    data = obj.generateSession(client_id, password, totp)
+    if not data['status']:
+         print("Angel One Login Failed:", data['message'])
+         return []
+         
+    print("Fetching real historical OHLCV data from Angel One...")
+    params = {
+        "exchange": "MCX",
+        "symboltoken": symbol_token,
+        "interval": "ONE_MINUTE",
+        "fromdate": "2024-11-01 09:00",
+        "todate":   "2024-11-05 23:30" 
+    }
+    
+    hist_data = obj.getCandleData(params)
+    if hist_data.get("status") and hist_data.get("data"):
+         return hist_data["data"]
+    print("Error fetching data:", hist_data)
+    return []
+
+def synthesize_ticks_from_ohlcv(candle_data):
+    # candle output: [timestamp, open, high, low, close, volume]
+    ticks = []
+    print(f"Synthesizing {len(candle_data)} 1-minute candles into Level-2 Ticks...")
+    
+    for c in candle_data:
+        ts = c[0]
+        o, h, l, c_price, v = c[1], c[2], c[3], c[4], c[5]
         
-        current_price += step
-        bid_qty = random.randint(50, 400)
-        ask_qty = random.randint(50, 400)
+        # Determine Imbalance Synthesis (If candle is green, bids outpaced asks)
+        is_bullish = c_price >= o
+        base_qty = max(v / 2, 50) 
         
-        if is_spoof:
-            if step > 0: bid_qty += 5000
-            else: ask_qty += 5000
+        if is_bullish:
+            bid_qty = base_qty * 1.5
+            ask_qty = base_qty * 0.5
+        else:
+            bid_qty = base_qty * 0.5
+            ask_qty = base_qty * 1.5
             
+        # Spread Synthesis (Widens proportionally to volatility/range)
+        candle_range = h - l
+        spread = 1.0 + min((candle_range * 0.1), 5.0)
+        
         tick = {
-            "symbol": "CRUDEOIL_SIM",
-            "price": round(current_price, 2),
-            "volume": random.randint(10, 500),
+            "symbol": "CRUDEOIL_HIST",
+            "price": c_price,
+            "volume": v,
             "bid_qty": bid_qty,
             "ask_qty": ask_qty,
-            "best_bid": round(current_price - random.uniform(0, 0.5), 2),
-            "best_ask": round(current_price + random.uniform(0, 0.5), 2),
-            "timestamp": "SIMULATED"
+            "best_bid": c_price - (spread / 2.0),
+            "best_ask": c_price + (spread / 2.0),
+            "timestamp": "SIMULATED" # Bypass Time Gate for pure mechanical testing 
         }
         ticks.append(tick)
+        
     return ticks
 
 def run_backtest():
-    print("Generating synthetic market data...")
-    dataset = generate_synthetic_ticks(5000)
+    api_key = os.getenv("API_KEY")
+    symbol_token = os.getenv("CRUDE_TOKEN", "225431") # fallback default MCX CRUDEOIL
+    
+    raw_candles = fetch_real_historical_data(api_key, symbol_token)
+    if not raw_candles:
+        return
+        
+    dataset = synthesize_ticks_from_ohlcv(raw_candles)
     
     trades = []
     active_trade = None
     
-    print("Running Backtest Simulation...")
-    for i, tick in enumerate(dataset):
-        # Feed tick to engine
+    print("Running Historical Backtest Sequence...")
+    for tick in dataset:
         signal_output = analyze_tick(tick)
         
-        # If in a trade, check SL or Target hit
         if active_trade:
             if active_trade['action'] == 'BUY':
                 if tick['price'] >= active_trade['target']:
@@ -61,7 +111,7 @@ def run_backtest():
                 elif tick['price'] >= active_trade['sl']:
                     trades.append({"result": "LOSS", "profit": active_trade['entry'] - active_trade['sl']})
                     active_trade = None
-            continue # Don't take a new trade until current is closed
+            continue
             
         if signal_output.get("action") in ["BUY", "SELL"]:
             try:
@@ -75,11 +125,11 @@ def run_backtest():
                     "target": target_f,
                     "sl": sl_f
                 }
-            except Exception as e:
+            except Exception:
                 pass
 
     print("\n" + "="*30)
-    print("BACKTEST RESULTS")
+    print("HISTORICAL BACKTEST RESULTS")
     print("="*30)
     
     total_trades = len(trades)

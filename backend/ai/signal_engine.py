@@ -92,7 +92,14 @@ def analyze_tick(current_tick: dict) -> dict:
     
     if imbalance_score > adaptive_threshold and momentum > 0:
         if buy_volume > (sell_volume * 1.3): # Volume Spikes
-            if validate_with_ai_filter("BUY", {"imbalance": imbalance_score, "vol_diff": buy_volume - sell_volume}):
+            full_context = {
+                "spread": spread,
+                "imbalance_score": imbalance_score,
+                "volatility_factor": volatility_factor,
+                "session_time": str(current_time),
+                "vol_diff": buy_volume - sell_volume
+            }
+            if validate_with_ai_filter("BUY", full_context):
                 signal = "BUY"
                 confidence = min(0.98, 0.5 + abs(imbalance_score) * 0.5)
                 rounded_strike = round(current_price / 100) * 100
@@ -103,7 +110,14 @@ def analyze_tick(current_tick: dict) -> dict:
             
     elif imbalance_score < -adaptive_threshold and momentum < 0:
         if sell_volume > (buy_volume * 1.3): # Volume Spikes
-            if validate_with_ai_filter("SELL", {"imbalance": imbalance_score, "vol_diff": sell_volume - buy_volume}):
+            full_context = {
+                "spread": spread,
+                "imbalance_score": imbalance_score,
+                "volatility_factor": volatility_factor,
+                "session_time": str(current_time),
+                "vol_diff": sell_volume - buy_volume
+            }
+            if validate_with_ai_filter("SELL", full_context):
                 signal = "SELL"
                 confidence = min(0.98, 0.5 + abs(imbalance_score) * 0.5)
                 rounded_strike = round(current_price / 100) * 100
