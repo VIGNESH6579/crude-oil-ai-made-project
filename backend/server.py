@@ -165,6 +165,8 @@ async def startup_event():
                         "volume": random.randint(100, 5000),
                         "bid_qty": random.randint(50, 400),
                         "ask_qty": random.randint(50, 400),
+                        "best_bid": round(tick_price - 1.0, 2),
+                        "best_ask": round(tick_price + 1.0, 2),
                         "timestamp": "FALLBACK"
                     }
                     
@@ -200,6 +202,8 @@ async def websocket_endpoint(websocket: WebSocket):
                     "volume": random.randint(100, 5000),
                     "bid_qty": random.randint(50, 400),
                     "ask_qty": random.randint(50, 400),
+                    "best_bid": round(tick_price - 1.0, 2),
+                    "best_ask": round(tick_price + 1.0, 2),
                     "timestamp": "SIMULATED"
                 }
                 

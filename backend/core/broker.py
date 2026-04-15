@@ -88,21 +88,32 @@ class AngelBroker:
                 bid_qty = sum([b['quantity'] for b in message.get('best_5_buy_data', [])])
                 ask_qty = sum([a['quantity'] for a in message.get('best_5_sell_data', [])])
                 
+                buy_data = message.get('best_5_buy_data', [])
+                best_bid = (buy_data[0]['price'] / 100.0) if buy_data else ltp
+                
+                sell_data = message.get('best_5_sell_data', [])
+                best_ask = (sell_data[0]['price'] / 100.0) if sell_data else ltp
+                
                 return {
                     "symbol": "CRUDEOIL",
                     "price": ltp,
                     "volume": volume,
                     "bid_qty": bid_qty,
                     "ask_qty": ask_qty,
+                    "best_bid": best_bid,
+                    "best_ask": best_ask,
                     "timestamp": message.get('exchange_timestamp')
                 }
             elif 'last_traded_price' in message:
+                ltp = message['last_traded_price'] / 100.0
                 return {
                     "symbol": "CRUDEOIL",
-                    "price": message['last_traded_price'] / 100.0,
+                    "price": ltp,
                     "volume": 0,
                     "bid_qty": 50,
                     "ask_qty": 50,
+                    "best_bid": ltp - 1,
+                    "best_ask": ltp + 1,
                     "timestamp": message.get('exchange_timestamp')
                 }
         except Exception as e:

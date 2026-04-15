@@ -23,17 +23,41 @@ def analyze_tick(current_tick: dict) -> dict:
     if len(df) < 20: 
         return {"status": "WARMUP", "message": "Collecting market tick liquidity..."}
         
-    # Heuristic Signal Generation (Imitation of High-Frequency ML for Options)
-    # 1. Order Book Imbalance (Are buyers pushing?)
-    recent_bid = df['bid_qty'].tail(5).sum()
-    recent_ask = df['ask_qty'].tail(5).sum()
-    imbalance = (recent_bid - recent_ask) / (recent_bid + recent_ask + 1e-9)
+    current_price = current_tick['price']
     
-    # 2. Short-term momentum
+    # 1. SPREAD FILTER
+    best_bid = current_tick.get('best_bid', current_price)
+    best_ask = current_tick.get('best_ask', current_price)
+    spread = best_ask - best_bid
+    if spread > 10.0:  # Threshold for Crude Oil
+        return {"status": "SKIP", "message": f"Spread too wide: {round(spread, 2)} pts"}
+
+    # 2. ADAPTIVE THRESHOLD (Linear Scaling via Volatility)
+    recent_prices = df['price'].tail(20)
+    recent_range = recent_prices.max() - recent_prices.min()
+    max_volatility = 30.0 
+    volatility_factor = min(recent_range / max_volatility, 1.0)
+    adaptive_threshold = 0.2 + (volatility_factor * 0.4) # Scales 0.2 to 0.6
+
+    # 3. PERSISTENCE FILTER (Weighted Score)
+    imbalances = (df['bid_qty'] - df['ask_qty']) / (df['bid_qty'] + df['ask_qty'] + 1e-9)
+    imbalance_score = imbalances.tail(3).mean()
+
+    # 4. VOLUME CONFIRMATION (Directional Bias)
+    last_10 = df.tail(10).copy()
+    last_10['price_change'] = last_10['price'].diff()
+    last_10['vol_change'] = last_10['volume'].diff().abs()
+    
+    buy_volume = last_10[last_10['price_change'] > 0]['vol_change'].sum() + 1e-9
+    sell_volume = last_10[last_10['price_change'] < 0]['vol_change'].sum() + 1e-9
+
+    # 5. DYNAMIC TARGET & SL (Clamping Layer)
+    raw_sl = 0.5 * max(recent_range, 8.0) 
+    sl_pts = min(max(raw_sl, 6.0), 20.0) 
+    target_pts = sl_pts * 1.8
+    
     returns = df['price'].pct_change().dropna()
     momentum = returns.tail(10).sum()
-    
-    current_price = current_tick['price']
     
     signal = "NEUTRAL"
     confidence = 0.0
@@ -41,32 +65,32 @@ def analyze_tick(current_tick: dict) -> dict:
     target = None
     sl = None
     
-    # Simple Scalping Logic: If bids heavily outweigh asks AND momentum is positive
-    if imbalance > 0.4 and momentum > 0:
-        signal = "BUY"
-        confidence = min(0.98, 0.5 + abs(imbalance) * 0.5)
-        # Options strategy logic
-        rounded_strike = round(current_price / 100) * 100
-        strike_price = rounded_strike if rounded_strike >= current_price else rounded_strike + 100
-        strike = f"{int(strike_price)} CE" # Call Option
-        target = f"{round(current_price + 35, 2)}"
-        sl = f"{round(current_price - 15, 2)}"
-    elif imbalance < -0.4 and momentum < 0:
-        signal = "SELL"
-        confidence = min(0.98, 0.5 + abs(imbalance) * 0.5)
-        # Options strategy logic
-        rounded_strike = round(current_price / 100) * 100
-        strike_price = rounded_strike if rounded_strike <= current_price else rounded_strike - 100
-        strike = f"{int(strike_price)} PE" # Put Option
-        target = f"{round(current_price - 35, 2)}"
-        sl = f"{round(current_price + 15, 2)}"
-        
+    if imbalance_score > adaptive_threshold and momentum > 0:
+        if buy_volume > (sell_volume * 1.3): # Volume Spikes
+            signal = "BUY"
+            confidence = min(0.98, 0.5 + abs(imbalance_score) * 0.5)
+            rounded_strike = round(current_price / 100) * 100
+            strike_price = rounded_strike if rounded_strike >= current_price else rounded_strike + 100
+            strike = f"{int(strike_price)} CE" 
+            target = f"{round(current_price + target_pts, 2)}"
+            sl = f"{round(current_price - sl_pts, 2)}"
+            
+    elif imbalance_score < -adaptive_threshold and momentum < 0:
+        if sell_volume > (buy_volume * 1.3): # Volume Spikes
+            signal = "SELL"
+            confidence = min(0.98, 0.5 + abs(imbalance_score) * 0.5)
+            rounded_strike = round(current_price / 100) * 100
+            strike_price = rounded_strike if rounded_strike <= current_price else rounded_strike - 100
+            strike = f"{int(strike_price)} PE" 
+            target = f"{round(current_price - target_pts, 2)}"
+            sl = f"{round(current_price + sl_pts, 2)}"
+            
     return {
         "status": "ACTIVE",
         "action": signal,
         "confidence": confidence,
         "current_ltp": current_price,
-        "imbalance": round(imbalance, 2),
+        "imbalance": round(imbalance_score, 2),
         "suggested_strike": strike,
         "target": target,
         "stop_loss": sl
