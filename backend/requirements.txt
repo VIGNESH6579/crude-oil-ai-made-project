@@ -9,3 +9,4 @@ python-dotenv
 pyotp
 requests
 logzero
+websocket-client
