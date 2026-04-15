@@ -68,6 +68,7 @@ async def startup_event():
     # If not simulation, connect to broker in background
     if not SIMULATION_MODE:
         TARGET_TOKEN = os.getenv("CRUDE_TOKEN", "225431") # E.g., MCX Crude Futures
+        main_loop = asyncio.get_running_loop()
         
         def on_tick_received(tick_data):
             signal = analyze_tick(tick_data)
@@ -77,7 +78,7 @@ async def startup_event():
             # Queue to asyncio loop
             asyncio.run_coroutine_threadsafe(
                 manager.broadcast(json.dumps(payload)),
-                asyncio.get_event_loop()
+                main_loop
             )
             
         # Run websocket in separate thread since it blocks
