@@ -60,14 +60,30 @@ app.add_middleware(
 manager = ConnectionManager()
 broker = AngelBroker()
 
-# Default to simulation if keys are missing
-SIMULATION_MODE = os.getenv("API_KEY") is None
+# Default to simulation if keys are missing from environment variables
+SIMULATION_MODE = not bool(os.getenv("API_KEY", "").strip())
 
 @app.on_event("startup")
 async def startup_event():
     # If not simulation, connect to broker in background
     if not SIMULATION_MODE:
-        TARGET_TOKEN = os.getenv("CRUDE_TOKEN", "225431") # E.g., MCX Crude Futures
+        def get_active_crude_token():
+            try:
+                url = "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json"
+                data = requests.get(url).json()
+                crude_tokens = []
+                for item in data:
+                    if item.get("exch_seg") == "MCX" and item.get("name") == "CRUDEOIL" and item.get("instrumenttype", "").upper() == "FUTCOM":
+                        crude_tokens.append(item)
+                if crude_tokens:
+                    crude_tokens.sort(key=lambda x: x.get("expiry", ""))
+                    print(f"Auto-fetched Crude Token: {crude_tokens[0]['token']} Expiry: {crude_tokens[0]['expiry']}")
+                    return crude_tokens[0]["token"]
+            except Exception as e:
+                print("Failed to auto-fetch token:", e)
+            return "225431"
+
+        TARGET_TOKEN = os.getenv("CRUDE_TOKEN") or get_active_crude_token()
         main_loop = asyncio.get_running_loop()
         
         def on_tick_received(tick_data):
