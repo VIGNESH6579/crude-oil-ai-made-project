@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { createChart } from 'lightweight-charts';
+import { createChart, LineSeries } from 'lightweight-charts';
 
 const LiveChart = ({ currentPrice }) => {
   const chartContainerRef = useRef();
@@ -29,7 +29,7 @@ const LiveChart = ({ currentPrice }) => {
       },
     });
 
-    seriesRef.current = chartRef.current.addLineSeries({
+    seriesRef.current = chartRef.current.addSeries(LineSeries, {
       color: '#3366FF',
       lineWidth: 2,
       crosshairMarkerVisible: true,
