@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+websockets
+pandas
+scikit-learn
+ta
+smartapi-python
+python-dotenv
+pyotp
+requests
