@@ -1,7 +1,8 @@
 import os
 import pyotp
 import logging
-from smartapi import SmartWebSocketV2, SmartConnect
+from SmartApi import SmartConnect
+from SmartApi.smartWebSocketV2 import SmartWebSocketV2
 from dotenv import load_dotenv
 
 load_dotenv()
