@@ -224,6 +224,6 @@ async def websocket_endpoint(websocket: WebSocket):
 def read_root():
     return {"status": "Crude Oil Trading Backend Active."}
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health_check():
     return {"status": "ok", "message": "Backend is healthy"}
