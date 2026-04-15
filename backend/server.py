@@ -39,15 +39,23 @@ def send_ntfy_alert(signal_data):
     except Exception as e:
         print(f"Failed to send NTFY notification: {e}")
 
+import time
+last_notified_time = 0
+
 def process_signal_and_notify(signal):
-    global last_notified_signal
+    global last_notified_signal, last_notified_time
     current_action = signal.get("action", "NEUTRAL")
     
-    # Only notify on new Buy/Sell triggers, not repeated ticks
+    # 1. Prevent exact consecutive duplicates
     if current_action in ["BUY", "SELL"] and current_action != last_notified_signal:
-        send_ntfy_alert(signal)
         
-    # Reset when neutral or changed
+        # 2. Prevent Flip-Flop Choppy Spam (3-minute minimum cooldown)
+        current_time = time.time()
+        if (current_time - last_notified_time) > 180:
+            send_ntfy_alert(signal)
+            last_notified_time = current_time
+            
+    # Always track the latest sequence so it resets on NEUTRAL
     last_notified_signal = current_action
 
 app.add_middleware(
