@@ -105,11 +105,13 @@ async def startup_event():
         main_loop = asyncio.get_running_loop()
         
         last_tick_time = 0
+        global_last_price = 6500.0
 
         def on_tick_received(tick_data):
-            nonlocal last_tick_time
+            nonlocal last_tick_time, global_last_price
             import time
             last_tick_time = time.time()
+            global_last_price = tick_data.get("price", global_last_price)
             
             signal = analyze_tick(tick_data)
             process_signal_and_notify(signal)
@@ -138,17 +140,16 @@ async def startup_event():
             
             print("Watchdog active. Monitoring Angel Broking stream...")
             
-            # Watchdog loop: If no data from Angel One for 5 seconds, pump simulation data!
-            base_price = 6500.0
-            nonlocal last_tick_time
-            last_tick_time = time.time() - 10 # Force immediate fallback check until first real tick
+            # Watchdog loop: If no data from Angel One for 30 seconds, pump simulation data!
+            nonlocal last_tick_time, global_last_price
+            last_tick_time = time.time() - 35 # Force immediate fallback check until first real tick
             
             while True:
-                time.sleep(0.5)
-                # Fallback condition: 5 seconds since last tick
-                if time.time() - last_tick_time > 5:
-                    tick_price = base_price + random.uniform(-1.5, 1.5)
-                    base_price = tick_price
+                time.sleep(1)
+                # Fallback condition: 30 seconds since last tick
+                if time.time() - last_tick_time > 30:
+                    tick_price = global_last_price + random.uniform(-1.5, 1.5)
+                    global_last_price = tick_price
                     
                     tick_data = {
                         "symbol": "CRUDEOIL (Sim)",
