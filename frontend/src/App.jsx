@@ -28,7 +28,7 @@ function App() {
     // Connect to Python FastAPI WebSocket
     const connectWs = () => {
       // In production, this would be an env variable
-      wsRef.current = new WebSocket('ws://localhost:8000/ws/market-data');
+      wsRef.current = new WebSocket('wss://crude-oil-ai-made-project.onrender.com/ws/market-data');
 
       wsRef.current.onopen = () => {
         setConnectionStatus('Live Server Connected');
