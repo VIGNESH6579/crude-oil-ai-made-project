@@ -209,9 +209,12 @@ async def websocket_endpoint(websocket: WebSocket):
                 await manager.broadcast(json.dumps(payload))
                 await asyncio.sleep(0.3) # Fast data simulation
         else:
-            # Just keep connection open, background thread pushes data
+            # Just keep connection open and periodically read to avoid timeout
             while True:
-                await asyncio.sleep(1)
+                try:
+                    await websocket.receive_text()
+                except Exception:
+                    break
     except Exception as e:
         print(f"WebSocket error: {e}")
     finally:
