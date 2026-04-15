@@ -98,7 +98,45 @@ async def startup_event():
             )
             
         # Run websocket in separate thread since it blocks
-        t = threading.Thread(target=broker.connect_websocket, args=(TARGET_TOKEN, on_tick_received))
+        def start_broker():
+            try:
+                # Returns false immediately if login fails
+                broker.connect_websocket(TARGET_TOKEN, on_tick_received)
+            except Exception as e:
+                print(f"Broker thread died with error: {e}")
+            
+            # If we reach here, Angel Broking failed to login or disconnected unexpectedly
+            print("CRITICAL: Angel Broking stream inactive. Falling back to dynamic simulation...")
+            
+            # Fallback to simulated loop locally so frontend doesn't flatline
+            base_price = 6500.0
+            import random
+            while True:
+                import time
+                tick_price = base_price + random.uniform(-1.5, 1.5)
+                base_price = tick_price
+                
+                tick_data = {
+                    "symbol": "CRUDEOIL (Sim)",
+                    "price": round(tick_price, 2),
+                    "volume": random.randint(100, 5000),
+                    "bid_qty": random.randint(50, 400),
+                    "ask_qty": random.randint(50, 400),
+                    "timestamp": "FALLBACK"
+                }
+                
+                signal = analyze_tick(tick_data)
+                process_signal_and_notify(signal)
+                
+                payload = {"tick": tick_data, "signal": signal}
+                # Queue to asyncio loop
+                asyncio.run_coroutine_threadsafe(
+                    manager.broadcast(json.dumps(payload)),
+                    main_loop
+                )
+                time.sleep(0.5)
+
+        t = threading.Thread(target=start_broker)
         t.daemon = True
         t.start()
 
