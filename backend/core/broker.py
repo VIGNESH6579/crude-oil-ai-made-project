@@ -59,16 +59,19 @@ class AngelBroker:
             feed_token=self.feed_token
         )
         
-        def on_data(wsapp, message):
+        def on_data(wsapp, message, *args):
             tick_data = self._parse_tick(message)
             if tick_data:
                 on_message_callback(tick_data)
 
         self.sws.on_data = on_data
         
-        def on_open(wsapp):
+        def on_open(wsapp, *args):
             logger.info("WebSocket connection opened. Subscribing to tokens...")
-            self.sws.subscribe(correlation_id, mode, token_list)
+            try:
+                self.sws.subscribe(correlation_id, mode, token_list)
+            except Exception as e:
+                logger.error(f"Subscribe failed: {e}")
 
         self.sws.on_open = on_open
         self.sws.connect()

@@ -86,7 +86,13 @@ async def startup_event():
         TARGET_TOKEN = os.getenv("CRUDE_TOKEN") or get_active_crude_token()
         main_loop = asyncio.get_running_loop()
         
+        last_tick_time = 0
+
         def on_tick_received(tick_data):
+            nonlocal last_tick_time
+            import time
+            last_tick_time = time.time()
+            
             signal = analyze_tick(tick_data)
             process_signal_and_notify(signal)
             
@@ -99,42 +105,51 @@ async def startup_event():
             
         # Run websocket in separate thread since it blocks
         def start_broker():
-            try:
-                # Returns false immediately if login fails
-                broker.connect_websocket(TARGET_TOKEN, on_tick_received)
-            except Exception as e:
-                print(f"Broker thread died with error: {e}")
+            import time, random
             
-            # If we reach here, Angel Broking failed to login or disconnected unexpectedly
-            print("CRITICAL: Angel Broking stream inactive. Falling back to dynamic simulation...")
+            # Start Angel Broker in daemon thread so it doesn't block watchdog
+            def angel_thread():
+                try:
+                    broker.connect_websocket(TARGET_TOKEN, on_tick_received)
+                except Exception as e:
+                    print(f"Broker thread died with error: {e}")
+                    
+            wt = threading.Thread(target=angel_thread)
+            wt.daemon = True
+            wt.start()
             
-            # Fallback to simulated loop locally so frontend doesn't flatline
+            print("Watchdog active. Monitoring Angel Broking stream...")
+            
+            # Watchdog loop: If no data from Angel One for 5 seconds, pump simulation data!
             base_price = 6500.0
-            import random
+            nonlocal last_tick_time
+            last_tick_time = time.time() - 10 # Force immediate fallback check until first real tick
+            
             while True:
-                import time
-                tick_price = base_price + random.uniform(-1.5, 1.5)
-                base_price = tick_price
-                
-                tick_data = {
-                    "symbol": "CRUDEOIL (Sim)",
-                    "price": round(tick_price, 2),
-                    "volume": random.randint(100, 5000),
-                    "bid_qty": random.randint(50, 400),
-                    "ask_qty": random.randint(50, 400),
-                    "timestamp": "FALLBACK"
-                }
-                
-                signal = analyze_tick(tick_data)
-                process_signal_and_notify(signal)
-                
-                payload = {"tick": tick_data, "signal": signal}
-                # Queue to asyncio loop
-                asyncio.run_coroutine_threadsafe(
-                    manager.broadcast(json.dumps(payload)),
-                    main_loop
-                )
                 time.sleep(0.5)
+                # Fallback condition: 5 seconds since last tick
+                if time.time() - last_tick_time > 5:
+                    tick_price = base_price + random.uniform(-1.5, 1.5)
+                    base_price = tick_price
+                    
+                    tick_data = {
+                        "symbol": "CRUDEOIL (Sim)",
+                        "price": round(tick_price, 2),
+                        "volume": random.randint(100, 5000),
+                        "bid_qty": random.randint(50, 400),
+                        "ask_qty": random.randint(50, 400),
+                        "timestamp": "FALLBACK"
+                    }
+                    
+                    signal = analyze_tick(tick_data)
+                    process_signal_and_notify(signal)
+                    
+                    payload = {"tick": tick_data, "signal": signal}
+                    # Queue to asyncio loop
+                    asyncio.run_coroutine_threadsafe(
+                        manager.broadcast(json.dumps(payload)),
+                        main_loop
+                    )
 
         t = threading.Thread(target=start_broker)
         t.daemon = True
